@@ -28,7 +28,7 @@ func main() {
 	flag.Parse()
 
 	opts := providerserver.ServeOpts{
-		Address: "newvmcloud/newvm",
+		Address: "registry.terraform.io/newvmcloud/newvm",
 		Debug:   debug,
 	}
 
