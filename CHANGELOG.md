@@ -9,3 +9,7 @@ Fixed an error about missing dynamic-link libraries
 ## 1.0.2
 
 Fixed providerserver.ServeOpts.Address
+
+## 1.0.3
+
+Compiled binaries for all platforms
