@@ -21,3 +21,7 @@ Added release automation
 ## 1.0.5
 
 Release automation change
+
+## 1.0.6
+
+Release automation bugfix

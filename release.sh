@@ -95,10 +95,9 @@ for p in "${PLATFORMS[@]}"; do
 done
 
 jq -n \
-  --arg version "${VERSION}" \
   --argjson protocols "${PROTOCOLS}" \
   --argjson platforms "${PLAT_JSON}" \
-  '{version:$version, protocols:$protocols, platforms:$platforms}' > "${MANIFEST}"
+  '{version:1, protocols:$protocols, platforms:$platforms}' > "${MANIFEST}"
 
 ### --- SHA256SUMS (ZIPs + MANIFEST) --- ###
 echo "==> Generating SHA256SUMS (including manifest)"
@@ -134,10 +133,10 @@ if command -v gh >/dev/null 2>&1; then
 
   echo "==> Uploading assets"
   gh release upload "${TAG}" \
-    "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_*.zip" \
-   "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_SHA256SUMS" \
-    "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_SHA256SUMS.sig" \
-    "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_manifest.json" \
+    ${OUTDIR}/terraform-provider-${NAME}_${VERSION}_*.zip \
+    ${OUTDIR}/terraform-provider-${NAME}_${VERSION}_SHA256SUMS \
+    ${OUTDIR}/terraform-provider-${NAME}_${VERSION}_SHA256SUMS.sig \
+    ${OUTDIR}/terraform-provider-${NAME}_${VERSION}_manifest.json \
     --clobber
 fi
 
