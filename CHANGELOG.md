@@ -17,3 +17,7 @@ Compiled binaries for all platforms
 ## 1.0.4
 
 Added release automation
+
+## 1.0.5
+
+Release automation change

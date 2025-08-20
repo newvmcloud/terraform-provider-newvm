@@ -121,27 +121,24 @@ if command -v gh >/dev/null 2>&1; then
   if ! gh release view "${TAG}" >/dev/null 2>&1; then
     # Create tag and release (lightweight tag; for annotated use git tag -a)
     if ! git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
-      echo "git tag \"${TAG}\"" #git tag "${TAG}"
-      echo "git push origin \"${TAG}\"" #git push origin "${TAG}"
+      git tag "${TAG}"
+      git push github "${TAG}"
     fi
     echo "==> Creating GitHub release ${TAG}"
-    echo "gh release create \"${TAG}\" \\"
-    echo "  --title \"${TAG}\" \\"
-    echo "  --notes \"Automated release for ${NAME} ${VERSION}\""
-    #gh release create "${TAG}" \
-    #  --title "${TAG}" \
-    #  --notes "Automated release for ${NAME} ${VERSION}"
+    gh release create "${TAG}" \
+      --title "${TAG}" \
+      --notes "Automated release for ${NAME} ${TAG}"
   else
     echo "==> GitHub release ${TAG} already exists"
   fi
 
   echo "==> Uploading assets"
-  #gh release upload "${TAG}" \
-  #  "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_*.zip" \
-  # "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_SHA256SUMS" \
-  #  "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_SHA256SUMS.sig" \
-  #  "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_manifest.json" \
-  #  --clobber
+  gh release upload "${TAG}" \
+    "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_*.zip" \
+   "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_SHA256SUMS" \
+    "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_SHA256SUMS.sig" \
+    "${OUTDIR}/terraform-provider-${NAME}_${VERSION}_manifest.json" \
+    --clobber
 fi
 
 echo "Done. Artifacts are in: ${OUTDIR}"
