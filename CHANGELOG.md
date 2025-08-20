@@ -25,3 +25,7 @@ Release automation change
 ## 1.0.6
 
 Release automation bugfix
+
+## 1.0.7
+
+Release automation without platforms in manifest

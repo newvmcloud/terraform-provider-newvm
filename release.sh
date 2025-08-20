@@ -76,28 +76,36 @@ done
 ### --- MANIFEST --- ###
 echo "==> Creating manifest"
 MANIFEST="${OUTDIR}/terraform-provider-${NAME}_${VERSION}_manifest.json"
+cat > "$MANIFEST" <<EOF
+{
+  "version": 1,
+  "metadata": {
+    "protocol_versions": ["6.0"]
+  }
+}
+EOF
 
 # Build platforms JSON array with shasums of the zips
-PLAT_JSON="[]"
-for p in "${PLATFORMS[@]}"; do
-  GOOS="${p%_*}"
-  GOARCH="${p#*_}"
-  ZIP="terraform-provider-${NAME}_${VERSION}_${GOOS}_${GOARCH}.zip"
-  SHASUM="$(${SHACMD} "${OUTDIR}/${ZIP}" | awk '{print $1}')"
+#PLAT_JSON="[]"
+#for p in "${PLATFORMS[@]}"; do
+#  GOOS="${p%_*}"
+#  GOARCH="${p#*_}"
+#  ZIP="terraform-provider-${NAME}_${VERSION}_${GOOS}_${GOARCH}.zip"
+#  SHASUM="$(${SHACMD} "${OUTDIR}/${ZIP}" | awk '{print $1}')"
+#
+#  PLAT_JSON="$(jq -c \
+#    --arg os "${GOOS}" \
+#    --arg arch "${GOARCH}" \
+#    --arg filename "${ZIP}" \
+#    --arg shasum "${SHASUM}" \
+#    '. + [ {os:$os, arch:$arch, filename:$filename, shasum:$shasum} ]' \
+#    <<< "${PLAT_JSON}")"
+#done
 
-  PLAT_JSON="$(jq -c \
-    --arg os "${GOOS}" \
-    --arg arch "${GOARCH}" \
-    --arg filename "${ZIP}" \
-    --arg shasum "${SHASUM}" \
-    '. + [ {os:$os, arch:$arch, filename:$filename, shasum:$shasum} ]' \
-    <<< "${PLAT_JSON}")"
-done
-
-jq -n \
-  --argjson protocols "${PROTOCOLS}" \
-  --argjson platforms "${PLAT_JSON}" \
-  '{version:1, protocols:$protocols, platforms:$platforms}' > "${MANIFEST}"
+#jq -n \
+#  --argjson protocols "${PROTOCOLS}" \
+#  --argjson platforms "${PLAT_JSON}" \
+#  '{version:1, protocols:$protocols, platforms:$platforms}' > "${MANIFEST}"
 
 ### --- SHA256SUMS (ZIPs + MANIFEST) --- ###
 echo "==> Generating SHA256SUMS (including manifest)"
