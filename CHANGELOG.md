@@ -29,3 +29,7 @@ Release automation bugfix
 ## 1.0.7
 
 Release automation without platforms in manifest
+
+## 1.0.8
+
+Release automation without newline in manifest
