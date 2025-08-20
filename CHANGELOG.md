@@ -13,3 +13,7 @@ Fixed providerserver.ServeOpts.Address
 ## 1.0.3
 
 Compiled binaries for all platforms
+
+## 1.0.4
+
+Added release automation
