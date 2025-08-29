@@ -306,6 +306,21 @@ func (c *Client) GetVm(vmID string) (*Vm, error) {
 			log.Printf("Obtained location code '%s' from ID <%s>", locationCode, orderData.Order.ProvisioningOptions.Provisioning.Location)
 		}
 
+		var vpcNumber int32 = 0
+		// obtain all VPC members and see if our order is in there
+		// @todo support for multiple VPCs
+		vpcMembers, err := c.GetVpcMembers()
+		if err != nil {
+			return nil, err
+		}
+		for _, vpcMember := range vpcMembers {
+			if orderData.Order.ID == vpcMember.OrderId { // for now, we just use the first match
+				vpcNumber = vpcMember.Vxlan
+				break
+			}
+		}
+		log.Printf("Obtained VPC number '%v' for order ID %v", vpcNumber, orderData.Order.ID)
+
 		// populate the VM with obtained data values
 		vm := Vm{
 			ID:          orderData.Order.ProvisioningData.VmUuid,
@@ -317,6 +332,9 @@ func (c *Client) GetVm(vmID string) (*Vm, error) {
 			Ram:         int64(vmRam),    //orderData.Order.ProvisioningOptions.Pricing.Ram,
 			Cores:       vmCores,         //int(orderData.Order.ProvisioningOptions.Pricing.Cores),
 			HdSize:      int64(vmHdSize), //orderData.Order.ProvisioningOptions.Pricing.HdSize,
+			SshKey:      orderData.Order.ProvisioningOptions.Provisioning.SshKey,
+			IsVpcOnly:   orderData.Order.ProvisioningOptions.Provisioning.IsVpcOnly,
+			UseDhcp:     orderData.Order.ProvisioningOptions.Provisioning.UseDhcp,
 		}
 		err = json.Unmarshal(bodyOrder, &vm)
 		if err != nil {
@@ -372,6 +390,26 @@ func getLocationID(c *Client, locationCode string) (string, error) {
 	return locationID, nil
 }
 
+func getVxlanID(c *Client, vpcNumber int32) (string, error) {
+	log.Printf("Looking up VxLAN ID for number '%d'", vpcNumber)
+	vxlanID := ""
+	if vpcNumber > 0 {
+		vxlans, err := c.GetVpcs()
+		if err != nil {
+			return "", err
+		}
+		for _, vxlan := range vxlans {
+			if vxlan.Number == vpcNumber {
+				vxlanID = vxlan.ID
+				break
+			}
+		}
+		log.Printf("Obtained VxLAN ID <%s> for number '%d'", vxlanID, vpcNumber)
+	}
+
+	return vxlanID, nil
+}
+
 func splitVmProductID(vmProductID string) (string, int, error) {
 	productCode := vmProductID[0:4] // 'VM-A' part
 	typePart := vmProductID[4:]     // 'x' part
@@ -397,6 +435,14 @@ func (c *Client) CreateVm(vm Vm) (*Vm, error) {
 		Hostname    string `json:"hostname,omitempty"`
 		Os          string `json:"os,omitempty"`
 		VmLocations string `json:"vm_locations,omitempty"`
+		VxlanID     string `json:"vxlanid,omitempty"`
+		SshKey      string `json:"sshkey,omitempty"`
+		IsVpcOnly   bool   `json:"isVpcOnly,omitempty"`
+		UseDhcp     bool   `json:"useDhcp,omitempty"`
+		IpAddress   string `json:"ipaddress,omitempty"`
+		SubnetMask  string `json:"subnetmask,omitempty"`
+		Gateway     string `json:"gateway,omitempty"`
+		DnsServer   string `json:"dnsserver,omitempty"`
 	}
 	type NewVmOrder struct {
 		Amount            NewVmOrderOption  `json:"amount,omitempty"`
@@ -422,6 +468,11 @@ func (c *Client) CreateVm(vm Vm) (*Vm, error) {
 	if err != nil {
 		return nil, err
 	}
+	// get VxLAN ID
+	vxlanID, err := getVxlanID(c, vm.Vpc)
+	if err != nil {
+		return nil, err
+	}
 
 	provisioning := NewVmProvisioning{
 		Hostname: vm.Hostname,
@@ -429,6 +480,23 @@ func (c *Client) CreateVm(vm Vm) (*Vm, error) {
 	}
 	if locationID != "" {
 		provisioning.VmLocations = locationID
+	}
+	if vxlanID != "" {
+		provisioning.VxlanID = vxlanID
+	}
+	if vm.SshKey != "" {
+		provisioning.SshKey = vm.SshKey
+	}
+	if vm.IsVpcOnly {
+		provisioning.IsVpcOnly = true
+	}
+	if vm.UseDhcp {
+		provisioning.UseDhcp = true
+	} else {
+		provisioning.IpAddress = vm.IpAddress
+		provisioning.SubnetMask = vm.SubnetMask
+		provisioning.Gateway = vm.Gateway
+		provisioning.DnsServer = vm.DnsServer
 	}
 
 	newVmOrder := NewVmOrder{

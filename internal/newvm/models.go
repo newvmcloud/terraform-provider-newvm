@@ -41,6 +41,14 @@ type Vm struct {
 	IsSecureBootEnabled  bool   `json:"isSecureBootEnabled"`
 	SecureBootTemplateId string `json:"secureBootTemplateId,omitempty"`
 	Firmware             string `json:"firmware"`
+	SshKey               string `json:"sshkey,omitempty"`
+	IsVpcOnly            bool   `json:"isVpcOnly,omitempty"`
+	UseDhcp              bool   `json:"useDhcp,omitempty"`
+	Vpc                  int32  `json:"vpc,omitempty"`
+	IpAddress            string `json:"ipaddress,omitempty"`
+	SubnetMask           string `json:"subnetmask,omitempty"`
+	Gateway              string `json:"gateway,omitempty"`
+	DnsServer            string `json:"dnsserver,omitempty"`
 }
 
 // VM product
@@ -82,6 +90,23 @@ type Location struct {
 	Provisionable int      `json:"provisionable,omitempty"`
 }
 
+// NewVM VPC
+type Vpc struct {
+	ID        string `json:"id"`
+	Number    int32  `json:"vxlan"`
+	Name      string `json:"label"`
+	OwnerId   int32  `json:"ownerid,omitempty"`
+	Removable int    `json:"removablebycustomer,omitempty"`
+}
+
+// NewVM VPC Member
+type VpcMember struct {
+	ID         string `json:"id"`
+	Vxlan      int32  `json:"vxlan"`
+	MacAddress string `json:"macaddress"`
+	OrderId    int    `json:"orderid,omitempty"`
+}
+
 // NewVM pricing option
 type NewVmPricing struct {
 	Type   int32 `json:"vm_type,omitempty"`
@@ -92,9 +117,17 @@ type NewVmPricing struct {
 
 // NewVM provisioning option
 type NewVmProvisioning struct {
-	Hostname string `json:"hostname,omitempty"`
-	Os       string `json:"os,omitempty"`
-	Location string `json:"vm_locations,omitempty"`
+	Hostname   string `json:"hostname,omitempty"`
+	SshKey     string `json:"sshkey,omitempty"`
+	VxlanId    string `json:"vxlanid,omitempty"`
+	Os         string `json:"os,omitempty"`
+	Location   string `json:"vm_locations,omitempty"`
+	IsVpcOnly  bool   `json:"isVpcOnly,omitempty"`
+	UseDhcp    bool   `json:"useDhcp,omitempty"`
+	IpAddress  string `json:"ipaddress,omitempty"`
+	SubnetMask string `json:"subnetmask,omitempty"`
+	Gateway    string `json:"gateway,omitempty"`
+	DnsServer  string `json:"dnsserver,omitempty"`
 }
 
 // NewVM provisioning options

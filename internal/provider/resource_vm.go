@@ -12,6 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -43,6 +45,14 @@ type vmResourceModel struct {
 	Cores       types.Int64  `tfsdk:"cores"`
 	Disk        types.Int64  `tfsdk:"disk"`
 	Comments    types.String `tfsdk:"comments"`
+	SshKey      types.String `tfsdk:"ssh_key"`
+	IsVpcOnly   types.Bool   `tfsdk:"is_vpc_only"`
+	UseDhcp     types.Bool   `tfsdk:"use_dhcp"`
+	Vpc         types.Int32  `tfsdk:"vpc"`
+	IpAddress   types.String `tfsdk:"ip_address"`
+	SubnetMask  types.String `tfsdk:"subnet_mask"`
+	Gateway     types.String `tfsdk:"gateway"`
+	DnsServer   types.String `tfsdk:"dns_server"`
 	LastUpdated types.String `tfsdk:"last_updated"`
 }
 
@@ -86,6 +96,9 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 			"hostname": schema.StringAttribute{
 				Description: "hostname for the VM.",
 				Required:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"location": schema.StringAttribute{
 				Description: "datacenter location for the VM.",
@@ -128,6 +141,80 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString(""),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"ssh_key": schema.StringAttribute{
+				Description: "SSH key to use for administrator account.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"is_vpc_only": schema.BoolAttribute{
+				Description: "Indicates if VM is only connected to a VPC.",
+				Optional:    true,
+				// Computed:    true,
+				// Default:     booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"use_dhcp": schema.BoolAttribute{
+				Description: "Indicates if VM should use DHCP for obtaining IP data.",
+				Optional:    true,
+				// Computed:    true,
+				// Default:     booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"vpc": schema.Int32Attribute{
+				Description: "The VPC number (VxLAN).",
+				Optional:    true,
+				// Computed:    true,
+				PlanModifiers: []planmodifier.Int32{
+					int32planmodifier.UseStateForUnknown(),
+				},
+			},
+			"ip_address": schema.StringAttribute{
+				Description: "IP address of VM's primary network interface.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"subnet_mask": schema.StringAttribute{
+				Description: "Subnetmask of VM's primary network interface.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"gateway": schema.StringAttribute{
+				Description: "Default gateway IP address of VM's primary network interface.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"dns_server": schema.StringAttribute{
+				Description: "DNS server IP address of VM's primary network interface.",
+				Optional:    true,
+				Computed:    true,
+				Default:     stringdefault.StaticString(""),
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"last_updated": schema.StringAttribute{
 				Description: "Timestamp of the last Terraform update of the VM.",
@@ -156,6 +243,14 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		Ram:         plan.Ram.ValueInt64(),
 		Cores:       int(plan.Cores.ValueInt64()),
 		HdSize:      plan.Disk.ValueInt64(),
+		SshKey:      plan.SshKey.ValueString(),
+		IsVpcOnly:   plan.IsVpcOnly.ValueBool(),
+		UseDhcp:     plan.UseDhcp.ValueBool(),
+		Vpc:         plan.Vpc.ValueInt32(),
+		IpAddress:   plan.IpAddress.ValueString(),
+		SubnetMask:  plan.SubnetMask.ValueString(),
+		Gateway:     plan.Gateway.ValueString(),
+		DnsServer:   plan.DnsServer.ValueString(),
 	}
 
 	// Create new vm
@@ -242,6 +337,10 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		Ram:         plan.Ram.ValueInt64(),
 		Cores:       int(plan.Cores.ValueInt64()),
 		HdSize:      plan.Disk.ValueInt64(),
+		SshKey:      plan.SshKey.ValueString(),
+		IsVpcOnly:   plan.IsVpcOnly.ValueBool(),
+		UseDhcp:     plan.UseDhcp.ValueBool(),
+		Vpc:         plan.Vpc.ValueInt32(),
 	}
 	// Update existing vm
 	_, err := r.client.UpdateVm(plan.ID.ValueString(), newVmOrder)
@@ -271,6 +370,7 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	plan.Ram = types.Int64Value(vmNew.Ram)
 	plan.Cores = types.Int64Value(int64(vmNew.Cores))
 	plan.Disk = types.Int64Value(vmNew.HdSize)
+	plan.SshKey = types.StringValue(vmNew.SshKey)
 	plan.LastUpdated = types.StringValue(time.Now().Format(time.RFC850))
 
 	diags = resp.State.Set(ctx, plan)

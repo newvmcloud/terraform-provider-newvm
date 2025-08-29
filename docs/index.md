@@ -18,10 +18,3 @@ provider "newvm" {
     host     = var.host
 }
 ```
-
-<!-- schema -->
-## Schema
-
-### Optional
-
-- `endpoint` (String) Example provider attribute

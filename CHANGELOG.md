@@ -33,3 +33,7 @@ Release automation without platforms in manifest
 ## 1.0.8
 
 Release automation without newline in manifest
+
+## 1.0.9
+
+VPC only VMs added

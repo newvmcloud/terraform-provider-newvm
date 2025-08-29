@@ -218,6 +218,7 @@ func (p *newvmProvider) DataSources(_ context.Context) []func() datasource.DataS
 		NewLocationsDataSource,
 		NewOperatingSystemsDataSource,
 		NewVmProductsDataSource,
+		NewVpcsDataSource,
 	}
 }
 
