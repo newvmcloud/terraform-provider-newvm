@@ -134,6 +134,7 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Default:     int64default.StaticInt64(0),
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
+					PreventDecreaseInt64{Attr: "disk", Unit: "GB"},
 				},
 			},
 			"comments": schema.StringAttribute{
