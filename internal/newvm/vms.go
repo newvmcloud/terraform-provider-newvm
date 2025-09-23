@@ -12,14 +12,6 @@ import (
 	"time"
 )
 
-type NewVmChangeRequestsWrapper struct {
-	Changes []NewVmChangeRequest `json:"result"`
-}
-
-type NewVmOrderWrapper struct {
-	Order NewVmOrder `json:"order"`
-}
-
 type NewVmVmWrapper struct {
 	Vm Vm `json:"vm"`
 }
@@ -28,39 +20,6 @@ type NewVmVmWrapper struct {
 func (c *Client) GetVmProducts() ([]VmProduct, error) {
 	vmProducts := []VmProduct{}
 
-	type IntermediateEnumOption struct {
-		Index       int     `json:"enum_index"`
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		Price       float64 `json:"price"`
-	}
-	type IntermediatePricingPricing struct {
-		Minimum   int     `json:"min"`
-		Price     float64 `json:"price"`
-		Increment int     `json:"per"`
-		UnitPrice float64 `json:"unit_price"`
-	}
-	type IntermediatePricing struct {
-		ID          string                       `json:"id"`
-		Type        string                       `json:"type"`
-		Unit        string                       `json:"unit"`
-		Minimum     int                          `json:"min"`
-		Maximum     int                          `json:"max"`
-		EnumOptions []IntermediateEnumOption     `json:"enum_options"`
-		Pricing     []IntermediatePricingPricing `json:"pricing"`
-	}
-	type IntermediateProperty struct {
-		ID    string `json:"id"`
-		Key   string `json:"key"`
-		Label string `json:"label"`
-		Unit  string `json:"unit"`
-	}
-	type IntermediateProductOptionProperty struct {
-		Index      int    `json:"optionindex"`
-		PropertyID string `json:"property_id"`
-		PricingID  string `json:"product_option_id"`
-		Value      string `json:"value"`
-	}
 	type IntermediateProduct struct {
 		ID               string                              `json:"id"`
 		BasePrice        float64                             `json:"base_price"`
@@ -176,11 +135,11 @@ func (c *Client) GetVmProducts() ([]VmProduct, error) {
 }
 
 // GetVm - Returns specific vm details
-func (c *Client) GetVm(vmID string) (*Vm, error) {
-	if vmID != "" {
+func (c *Client) GetVm(orderID string) (*Vm, error) {
+	if orderID != "" {
 		// combine data from various API paths
 		// first obtain the order details
-		reqOrder, err := http.NewRequest("GET", fmt.Sprintf("%s/account/v1/order/%s", c.HostURL, vmID), nil)
+		reqOrder, err := http.NewRequest("GET", fmt.Sprintf("%s/account/v1/order/%s", c.HostURL, orderID), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -213,7 +172,7 @@ func (c *Client) GetVm(vmID string) (*Vm, error) {
 
 		// merge outstanding change requests with the order details if any
 		if orderData.Order.NeedsChange == 1 {
-			reqChanges, err := http.NewRequest("GET", fmt.Sprintf("%s/account/v1/order/changerequest?orderId=%s", c.HostURL, vmID), nil)
+			reqChanges, err := http.NewRequest("GET", fmt.Sprintf("%s/account/v1/order/changerequest?orderId=%s", c.HostURL, orderID), nil)
 			if err != nil {
 				return nil, err
 			}
@@ -542,7 +501,7 @@ func (c *Client) CreateVm(vm Vm) (*Vm, error) {
 }
 
 // UpdateVm - Updates an order
-func (c *Client) UpdateVm(vmID string, vm Vm) (*Vm, error) {
+func (c *Client) UpdateVm(orderID string, vm Vm) (*Vm, error) {
 	// Order @NewVM Change request structure
 	type NewVmChangeOption struct {
 		VmCore      int `json:"vm_core"`
@@ -551,7 +510,7 @@ func (c *Client) UpdateVm(vmID string, vm Vm) (*Vm, error) {
 		VmType      int `json:"vm_type"`
 	}
 	// @todo support custom.hardDiskSizes
-	type NewVmChangRequest struct {
+	type NewVmChangeRequest struct {
 		Options NewVmChangeOption `json:"options"`
 	}
 
@@ -561,7 +520,7 @@ func (c *Client) UpdateVm(vmID string, vm Vm) (*Vm, error) {
 		panic(err) // ... handle error
 	}
 
-	newVmChange := NewVmChangRequest{
+	newVmChange := NewVmChangeRequest{
 		Options: NewVmChangeOption{
 			VmCore:      vm.Cores,
 			VmDiskspace: int(vm.HdSize),
@@ -574,7 +533,7 @@ func (c *Client) UpdateVm(vmID string, vm Vm) (*Vm, error) {
 		return nil, err
 	}
 	// change request
-	reqChange, err := http.NewRequest("PUT", fmt.Sprintf("%s/account/v1/order/%s", c.HostURL, vmID), strings.NewReader(string(rb)))
+	reqChange, err := http.NewRequest("PUT", fmt.Sprintf("%s/account/v1/order/%s", c.HostURL, orderID), strings.NewReader(string(rb)))
 	if err != nil {
 		return nil, err
 	}
@@ -594,9 +553,9 @@ func (c *Client) UpdateVm(vmID string, vm Vm) (*Vm, error) {
 }
 
 // DeleteVm - Deletes a VM
-func (c *Client) DeleteVm(vmID string) error { // vmID == orderID
+func (c *Client) DeleteVm(orderID string) error {
 	// obtain VM uuid
-	reqOrder, err := http.NewRequest("GET", fmt.Sprintf("%s/account/v1/order/%s", c.HostURL, vmID), nil)
+	reqOrder, err := http.NewRequest("GET", fmt.Sprintf("%s/account/v1/order/%s", c.HostURL, orderID), nil)
 	if err != nil {
 		return err
 	}
@@ -629,7 +588,7 @@ func (c *Client) DeleteVm(vmID string) error { // vmID == orderID
 		}
 
 		if stateData.Vm.Status == "STOPPED" {
-			log.Printf("VM %s state is already 'STOPPED'", vmID)
+			log.Printf("VM %s state is already 'STOPPED'", orderID)
 		} else {
 			// turn off VM if not off already
 			reqTurnOff, err := http.NewRequest("PATCH", fmt.Sprintf("%s/backend/com.newvm.network/v1/vm2/%s/changeState/off", c.HostURL, orderData.Order.ProvisioningData.VmUuid), nil)
@@ -640,7 +599,7 @@ func (c *Client) DeleteVm(vmID string) error { // vmID == orderID
 			if err != nil {
 				return err
 			}
-			log.Printf("Turned off VM %s", vmID)
+			log.Printf("Turned off VM %s", orderID)
 		}
 	}
 
@@ -665,7 +624,7 @@ func (c *Client) DeleteVm(vmID string) error { // vmID == orderID
 	if err != nil {
 		return err
 	}
-	reqOrderEnd, err := http.NewRequest("PUT", fmt.Sprintf("%s/account/v1/order/%s/enddate", c.HostURL, vmID), strings.NewReader(string(reqBodyOrderEnd)))
+	reqOrderEnd, err := http.NewRequest("PUT", fmt.Sprintf("%s/account/v1/order/%s/enddate", c.HostURL, orderID), strings.NewReader(string(reqBodyOrderEnd)))
 	if err != nil {
 		return err
 	}
@@ -677,7 +636,7 @@ func (c *Client) DeleteVm(vmID string) error { // vmID == orderID
 	if strings.ReplaceAll(string(resBodyOrderEnd), " ", "") != "{\"success\":true}" {
 		return errors.New(string(resBodyOrderEnd))
 	}
-	log.Printf("Set end date for order %s", vmID)
+	log.Printf("Set end date for order %s", orderID)
 
 	// @todo also delete sub orders
 	// @todo also delete sub orders

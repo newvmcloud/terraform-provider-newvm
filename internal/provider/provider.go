@@ -215,6 +215,7 @@ func (p *newvmProvider) Configure(ctx context.Context, req provider.ConfigureReq
 // DataSources defines the data sources implemented in the provider.
 func (p *newvmProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
+		NewControlPanelProductsDataSource,
 		NewLocationsDataSource,
 		NewOperatingSystemsDataSource,
 		NewVmProductsDataSource,
@@ -225,7 +226,7 @@ func (p *newvmProvider) DataSources(_ context.Context) []func() datasource.DataS
 // Resources defines the resources implemented in the provider.
 func (p *newvmProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		// NewOrderResource,
+		NewControlPanelResource,
 		NewVmResource,
 	}
 }
