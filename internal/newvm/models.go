@@ -199,30 +199,30 @@ type Product struct {
 
 // VM
 type Vm struct {
-	ID                   string `json:"id"`
-	OrderID              int    `json:"order_id,omitempty"`
-	VmProductID          string `json:"product,omitempty"` /* eg. VM-A2 or VM-B5 */
-	Os                   string `json:"os,omitempty"`
-	Hostname             string `json:"hostname,omitempty"`
-	Status               string `json:"status"`
-	VmName               string `json:"vmname"`
-	Location             string `json:"location,omitempty"`
-	Ram                  int64  `json:"ram"`
-	Reserved             int64  `json:"reserved"`
-	Cores                int    `json:"cores"`
-	HdSize               int64  `json:"hdsize"`
-	BiosGuid             string `json:"biosGuid,omitempty"`
-	IsSecureBootEnabled  bool   `json:"isSecureBootEnabled"`
-	SecureBootTemplateId string `json:"secureBootTemplateId,omitempty"`
-	Firmware             string `json:"firmware"`
-	SshKey               string `json:"sshkey,omitempty"`
-	IsVpcOnly            bool   `json:"isVpcOnly,omitempty"`
-	UseDhcp              bool   `json:"useDhcp,omitempty"`
-	Vpc                  int32  `json:"vpc,omitempty"`
-	IpAddress            string `json:"ipaddress,omitempty"`
-	SubnetMask           string `json:"subnetmask,omitempty"`
-	Gateway              string `json:"gateway,omitempty"`
-	DnsServer            string `json:"dnsserver,omitempty"`
+	ID                   string  `json:"id"`
+	OrderID              int     `json:"order_id,omitempty"`
+	VmProductID          string  `json:"product,omitempty"` /* eg. VM-A2 or VM-B5 */
+	Os                   string  `json:"os,omitempty"`
+	Hostname             string  `json:"hostname,omitempty"`
+	Status               string  `json:"status"`
+	VmName               string  `json:"vmname"`
+	Location             string  `json:"location,omitempty"`
+	Ram                  int64   `json:"ram"`
+	Reserved             int64   `json:"reserved"`
+	Cores                int     `json:"cores"`
+	HdSize               int64   `json:"hdsize"`
+	BiosGuid             string  `json:"biosGuid,omitempty"`
+	IsSecureBootEnabled  bool    `json:"isSecureBootEnabled"`
+	SecureBootTemplateId string  `json:"secureBootTemplateId,omitempty"`
+	Firmware             string  `json:"firmware"`
+	SshKey               string  `json:"sshkey,omitempty"`
+	IsVpcOnly            bool    `json:"isVpcOnly,omitempty"`
+	UseDhcp              bool    `json:"useDhcp,omitempty"`
+	Vpc                  []int32 `json:"vpc,omitempty"`
+	IpAddress            string  `json:"ipaddress,omitempty"`
+	SubnetMask           string  `json:"subnetmask,omitempty"`
+	Gateway              string  `json:"gateway,omitempty"`
+	DnsServer            string  `json:"dnsserver,omitempty"`
 }
 
 // VM product
@@ -240,7 +240,7 @@ type Vpc struct {
 	ID        string `json:"id"`
 	Number    int32  `json:"vxlan"`
 	Name      string `json:"label"`
-	OwnerId   int32  `json:"ownerid,omitempty"`
+	OwnerID   int32  `json:"ownerid,omitempty"`
 	Removable int    `json:"removablebycustomer,omitempty"`
 }
 
@@ -249,5 +249,5 @@ type VpcMember struct {
 	ID         string `json:"id"`
 	Vxlan      int32  `json:"vxlan"`
 	MacAddress string `json:"macaddress"`
-	OrderId    int    `json:"orderid,omitempty"`
+	OrderID    int    `json:"orderid,omitempty"`
 }

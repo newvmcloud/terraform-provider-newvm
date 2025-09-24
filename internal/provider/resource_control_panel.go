@@ -211,7 +211,7 @@ func (r *controlPanelResource) Read(ctx context.Context, req resource.ReadReques
 			)
 			return
 		}
-		log.Printf("control panel: %+v", controlPanel)
+
 		// Overwrite items with refreshed state
 		state.VmID = types.Int64Value(int64(controlPanel.VmID))
 		state.ProductID = types.StringValue(controlPanel.ProductID)

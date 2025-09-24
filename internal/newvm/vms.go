@@ -265,7 +265,7 @@ func (c *Client) GetVm(orderID string) (*Vm, error) {
 			log.Printf("Obtained location code '%s' from ID <%s>", locationCode, orderData.Order.ProvisioningOptions.Provisioning.Location)
 		}
 
-		var vpcNumber int32 = 0
+		var vpcNumbers []int32
 		// obtain all VPC members and see if our order is in there
 		// @todo support for multiple VPCs
 		vpcMembers, err := c.GetVpcMembers()
@@ -273,12 +273,11 @@ func (c *Client) GetVm(orderID string) (*Vm, error) {
 			return nil, err
 		}
 		for _, vpcMember := range vpcMembers {
-			if orderData.Order.ID == vpcMember.OrderId { // for now, we just use the first match
-				vpcNumber = vpcMember.Vxlan
-				break
+			if orderData.Order.ID == vpcMember.OrderID { // for now, we just use the first match
+				vpcNumbers = append(vpcNumbers, vpcMember.Vxlan)
 			}
 		}
-		log.Printf("Obtained VPC number '%v' for order ID %v", vpcNumber, orderData.Order.ID)
+		log.Printf("Obtained VPC numbers '%v' for order ID %v", vpcNumbers, orderData.Order.ID)
 
 		// populate the VM with obtained data values
 		vm := Vm{
@@ -294,12 +293,17 @@ func (c *Client) GetVm(orderID string) (*Vm, error) {
 			SshKey:      orderData.Order.ProvisioningOptions.Provisioning.SshKey,
 			IsVpcOnly:   orderData.Order.ProvisioningOptions.Provisioning.IsVpcOnly,
 			UseDhcp:     orderData.Order.ProvisioningOptions.Provisioning.UseDhcp,
+			IpAddress:   orderData.Order.ProvisioningData.VmIpAddress,
+			SubnetMask:  orderData.Order.ProvisioningOptions.Provisioning.SubnetMask,
+			Gateway:     orderData.Order.ProvisioningOptions.Provisioning.Gateway,
+			DnsServer:   orderData.Order.ProvisioningOptions.Provisioning.DnsServer,
+			Vpc:         vpcNumbers,
 		}
 		err = json.Unmarshal(bodyOrder, &vm)
 		if err != nil {
 			return nil, err
 		}
-		// log.Printf("VM: %+v\n", vm)
+		log.Printf("VM: %+v\n", vm)
 
 		return &vm, nil
 	} else {
@@ -428,7 +432,7 @@ func (c *Client) CreateVm(vm Vm) (*Vm, error) {
 		return nil, err
 	}
 	// get VxLAN ID
-	vxlanID, err := getVxlanID(c, vm.Vpc)
+	vxlanID, err := getVxlanID(c, vm.Vpc[0])
 	if err != nil {
 		return nil, err
 	}

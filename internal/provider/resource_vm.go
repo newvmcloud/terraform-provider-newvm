@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int32planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -48,7 +47,7 @@ type vmResourceModel struct {
 	SshKey      types.String `tfsdk:"ssh_key"`
 	IsVpcOnly   types.Bool   `tfsdk:"is_vpc_only"`
 	UseDhcp     types.Bool   `tfsdk:"use_dhcp"`
-	Vpc         types.Int32  `tfsdk:"vpc"`
+	Vpc         types.List   `tfsdk:"vpc"`
 	IpAddress   types.String `tfsdk:"ip_address"`
 	SubnetMask  types.String `tfsdk:"subnet_mask"`
 	Gateway     types.String `tfsdk:"gateway"`
@@ -173,13 +172,10 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 					boolplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"vpc": schema.Int32Attribute{
-				Description: "The VPC number (VxLAN).",
+			"vpc": schema.ListAttribute{
+				Description: "List of VPC numbers (VxLANs) attached to the VM.",
 				Optional:    true,
-				// Computed:    true,
-				PlanModifiers: []planmodifier.Int32{
-					int32planmodifier.UseStateForUnknown(),
-				},
+				ElementType: types.Int32Type,
 			},
 			"ip_address": schema.StringAttribute{
 				Description: "IP address of VM's primary network interface.",
@@ -235,6 +231,15 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		return
 	}
 
+	var vpcIDs []int32
+	if !plan.Vpc.IsNull() && !plan.Vpc.IsUnknown() {
+		diags = plan.Vpc.ElementsAs(ctx, &vpcIDs, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	// Generate API request body from plan
 	newVmOrder := newvm.Vm{
 		VmProductID: plan.VmProductID.ValueString(),
@@ -247,7 +252,7 @@ func (r *vmResource) Create(ctx context.Context, req resource.CreateRequest, res
 		SshKey:      plan.SshKey.ValueString(),
 		IsVpcOnly:   plan.IsVpcOnly.ValueBool(),
 		UseDhcp:     plan.UseDhcp.ValueBool(),
-		Vpc:         plan.Vpc.ValueInt32(),
+		Vpc:         vpcIDs,
 		IpAddress:   plan.IpAddress.ValueString(),
 		SubnetMask:  plan.SubnetMask.ValueString(),
 		Gateway:     plan.Gateway.ValueString(),
@@ -300,6 +305,12 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 			)
 			return
 		}
+		// vm.Vpc is []int32 coming from API
+		list, diags := types.ListValueFrom(ctx, types.Int32Type, vm.Vpc)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 
 		// Overwrite items with refreshed state
 		state.VmProductID = types.StringValue(vm.VmProductID)
@@ -309,6 +320,11 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		state.Ram = types.Int64Value(vm.Ram)
 		state.Cores = types.Int64Value(int64(vm.Cores))
 		state.Disk = types.Int64Value(vm.HdSize)
+		state.Vpc = list
+		state.IpAddress = types.StringValue(vm.IpAddress)
+		state.Gateway = types.StringValue(vm.Gateway)
+		state.DnsServer = types.StringValue(vm.DnsServer)
+		state.SubnetMask = types.StringValue(vm.SubnetMask)
 
 		// Set refreshed state
 		diags = resp.State.Set(ctx, &state)
@@ -329,6 +345,15 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
+	var vpcIDs []int32
+	if !plan.Vpc.IsNull() && !plan.Vpc.IsUnknown() {
+		diags = plan.Vpc.ElementsAs(ctx, &vpcIDs, false)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	// Generate API request body from plan
 	newVmOrder := newvm.Vm{
 		VmProductID: plan.VmProductID.ValueString(),
@@ -341,7 +366,7 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		SshKey:      plan.SshKey.ValueString(),
 		IsVpcOnly:   plan.IsVpcOnly.ValueBool(),
 		UseDhcp:     plan.UseDhcp.ValueBool(),
-		Vpc:         plan.Vpc.ValueInt32(),
+		Vpc:         vpcIDs,
 	}
 	// Update existing vm
 	_, err := r.client.UpdateVm(plan.ID.ValueString(), newVmOrder)

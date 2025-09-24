@@ -44,7 +44,7 @@ type vpcModel struct {
 // vpcMember
 type vpcMemberModel struct {
 	//ID         types.String   `tfsdk:"id"`
-	OrderId    types.Int32  `tfsdk:"orderid"`
+	OrderID    types.Int32  `tfsdk:"orderid"`
 	MacAddress types.String `tfsdk:"macaddress"`
 }
 
@@ -131,7 +131,7 @@ func (d *vpcsDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 			for _, member := range vpcMembers {
 				if vpc.Number == member.Vxlan {
 					vpcMember := vpcMemberModel{
-						OrderId:    types.Int32Value(int32(member.OrderId)),
+						OrderID:    types.Int32Value(int32(member.OrderID)),
 						MacAddress: types.StringValue(member.MacAddress),
 					}
 					members = append(members, vpcMember)
