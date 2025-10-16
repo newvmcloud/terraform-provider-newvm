@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 type NewVmVmWrapper struct {
@@ -505,7 +508,7 @@ func (c *Client) CreateVm(vm Vm) (*Vm, error) {
 }
 
 // UpdateVm - Updates an order
-func (c *Client) UpdateVm(orderID string, vm Vm) (*Vm, error) {
+func (c *Client) UpdateVm(orderID string, vmOld *Vm, vmNew Vm) (*Vm, error) {
 	// Order @NewVM Change request structure
 	type NewVmChangeOption struct {
 		VmCore      int `json:"vm_core"`
@@ -518,40 +521,184 @@ func (c *Client) UpdateVm(orderID string, vm Vm) (*Vm, error) {
 		Options NewVmChangeOption `json:"options"`
 	}
 
+	// helper to compare attr.Value
+	equal := func(a, b attr.Value) bool {
+		return a.Equal(b)
+	}
+
+	// helper to compare an array of int32
+	sameSetInt32 := func(a, b []int32) bool {
+		if len(a) != len(b) {
+			return false
+		}
+		seen := make(map[int32]struct{}, len(a))
+		for _, v := range a {
+			seen[v] = struct{}{}
+		}
+		for _, v := range b {
+			if _, ok := seen[v]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+
 	// split vm product ID to get product code and type
-	_, vmType, err := splitVmProductID(vm.VmProductID) // can also be: productCode, vmType, err :=
+	_, vmTypeOld, err := splitVmProductID(vmOld.VmProductID) // can also be: productCode, vmType, err :=
+	if err != nil {
+		panic(err) // ... handle error
+	}
+	_, vmTypeNew, err := splitVmProductID(vmNew.VmProductID) // can also be: productCode, vmType, err :=
 	if err != nil {
 		panic(err) // ... handle error
 	}
 
-	newVmChange := NewVmChangeRequest{
-		Options: NewVmChangeOption{
-			VmCore:      vm.Cores,
-			VmDiskspace: int(vm.HdSize),
-			VmMem:       int(vm.Ram),
-			VmType:      vmType,
-		},
-	}
-	rb, err := json.Marshal(newVmChange)
-	if err != nil {
-		return nil, err
-	}
-	// change request
-	reqChange, err := http.NewRequest("PUT", fmt.Sprintf("%s/account/v1/order/%s", c.HostURL, orderID), strings.NewReader(string(rb)))
-	if err != nil {
-		return nil, err
-	}
-
-	resChange, err := c.doRequest(reqChange)
-	if err != nil {
-		return nil, err
-	}
-
 	vmOrder := Vm{}
-	err = json.Unmarshal(resChange, &vmOrder)
-	if err != nil {
-		return nil, err
+
+	// determine if a change request is necessary
+	if !equal(types.Int32Value(int32(vmOld.Cores)), types.Int32Value(int32(vmNew.Cores))) ||
+		!equal(types.Int64Value(vmOld.HdSize), types.Int64Value(vmNew.HdSize)) ||
+		!equal(types.Int64Value(vmOld.Ram), types.Int64Value(vmNew.Ram)) ||
+		!equal(types.Int32Value(int32(vmTypeOld)), types.Int32Value(int32(vmTypeNew))) {
+		newVmChange := NewVmChangeRequest{
+			Options: NewVmChangeOption{
+				VmCore:      vmNew.Cores,
+				VmDiskspace: int(vmNew.HdSize),
+				VmMem:       int(vmNew.Ram),
+				VmType:      vmTypeNew,
+			},
+		}
+		rb, err := json.Marshal(newVmChange)
+		if err != nil {
+			return nil, err
+		}
+		// change request
+		reqChange, err := http.NewRequest("PUT", fmt.Sprintf("%s/account/v1/order/%s", c.HostURL, orderID), strings.NewReader(string(rb)))
+		if err != nil {
+			return nil, err
+		}
+
+		resChange, err := c.doRequest(reqChange)
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal(resChange, &vmOrder)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	// check if VPCs have changed
+	if !sameSetInt32(vmOld.Vpc, vmNew.Vpc) {
+		type VpcMemberRequest struct {
+			OrderID int32 `json:"orderid"`
+		}
+		type VpcMemberAddedResponse struct {
+			VpcMemberUUID string `json:"id"`
+		}
+		type VpcMemberRemovedResponse struct {
+			VpcMemberUUID string `json:"remoteId"`
+		}
+
+		// obtain all VPCs and index them by ID
+		vpcList, errVpcList := c.GetVpcs()
+		if errVpcList != nil {
+			tmpVm := Vm{}
+			return &tmpVm, errVpcList
+		}
+		vpcsByNumber := make(map[int32]Vpc, len(vpcList))
+		for _, record := range vpcList {
+			vpc := Vpc{
+				ID:        record.ID,
+				Number:    record.Number,
+				Name:      record.Name,
+				Removable: record.Removable,
+			}
+			vpcsByNumber[record.Number] = vpc
+		}
+
+		oldSet := make(map[int32]struct{}, len(vmOld.Vpc))
+		for _, v := range vmOld.Vpc {
+			oldSet[v] = struct{}{}
+		}
+		newSet := make(map[int32]struct{}, len(vmNew.Vpc))
+		for _, v := range vmNew.Vpc {
+			newSet[v] = struct{}{}
+		}
+
+		// classify: added & kept
+		for _, v := range vmNew.Vpc {
+			if _, ok := oldSet[v]; ok {
+				// kept, do nothing at all
+			} else {
+				// add new VPC member
+				oid, err := strconv.ParseInt(orderID, 10, 32)
+				if err != nil {
+					fmt.Println("Conversion error:", err)
+					return nil, err
+				}
+				vpcMemberOrder := VpcMemberRequest{
+					OrderID: int32(oid),
+				}
+				rb, err := json.Marshal(vpcMemberOrder)
+				if err != nil {
+					return nil, err
+				}
+				reqVpcMember, err := http.NewRequest("POST", fmt.Sprintf("%s/backend/com.newvm.network/v1/vxlan/%s/members", c.HostURL, vpcsByNumber[v].ID), strings.NewReader(string(rb)))
+				if err != nil {
+					return nil, err
+				}
+
+				resVpcMember, err := c.doRequest(reqVpcMember)
+				if err != nil {
+					return nil, err
+				}
+				vpcMember := VpcMemberAddedResponse{}
+				err = json.Unmarshal(resVpcMember, &vpcMember)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		// classify: removed (present before, missing now)
+		for _, v := range vmOld.Vpc {
+			if _, ok := newSet[v]; !ok {
+				// remove VPC member
+				oid, err := strconv.ParseInt(orderID, 10, 32)
+				if err != nil {
+					fmt.Println("Conversion error:", err)
+					return nil, err
+				}
+				vpcMemberOrder := VpcMemberRequest{
+					OrderID: int32(oid),
+				}
+				rb, err := json.Marshal(vpcMemberOrder)
+				if err != nil {
+					return nil, err
+				}
+				reqVpcMember, err := http.NewRequest("DELETE", fmt.Sprintf("%s/backend/com.newvm.network/v1/vxlan/%s/members", c.HostURL, vpcsByNumber[v].ID), strings.NewReader(string(rb)))
+				if err != nil {
+					return nil, err
+				}
+
+				resVpcMember, err := c.doRequest(reqVpcMember)
+				if err != nil {
+					return nil, err
+				}
+				vpcMember := VpcMemberRemovedResponse{}
+				err = json.Unmarshal(resVpcMember, &vpcMember)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	// @todo
+	// hostname
+	// OS
+	// SSH keys
 
 	return &vmOrder, nil
 }

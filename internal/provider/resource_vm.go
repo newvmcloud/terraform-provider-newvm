@@ -181,7 +181,7 @@ func (r *vmResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *r
 				Description: "IP address of VM's primary network interface.",
 				Optional:    true,
 				Computed:    true,
-				Default:     stringdefault.StaticString(""),
+				//Default:     stringdefault.StaticString(""),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
@@ -345,6 +345,16 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
+	// Fetch current VM data from API
+	vmCurrent, err := r.client.GetVm(plan.ID.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error Reading NewVM VM",
+			"Could not read NewVM VM ID "+plan.ID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
+
 	var vpcIDs []int32
 	if !plan.Vpc.IsNull() && !plan.Vpc.IsUnknown() {
 		diags = plan.Vpc.ElementsAs(ctx, &vpcIDs, false)
@@ -355,7 +365,7 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	}
 
 	// Generate API request body from plan
-	newVmOrder := newvm.Vm{
+	vmUpdated := newvm.Vm{
 		VmProductID: plan.VmProductID.ValueString(),
 		Os:          plan.Os.ValueString(),
 		Hostname:    plan.Hostname.ValueString(),
@@ -368,23 +378,47 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		UseDhcp:     plan.UseDhcp.ValueBool(),
 		Vpc:         vpcIDs,
 	}
-	// Update existing vm
-	_, err := r.client.UpdateVm(plan.ID.ValueString(), newVmOrder)
-	if err != nil {
+
+	// Static IPs only when applicable, and only if changed
+	if plan.IsVpcOnly.ValueBool() && !plan.UseDhcp.ValueBool() {
+		if !plan.IpAddress.IsUnknown() && !plan.IpAddress.IsNull() {
+			vmUpdated.IpAddress = plan.IpAddress.ValueString()
+		}
+		if !plan.SubnetMask.IsUnknown() && !plan.SubnetMask.IsNull() {
+			vmUpdated.SubnetMask = plan.SubnetMask.ValueString()
+		}
+		if !plan.Gateway.IsUnknown() && !plan.Gateway.IsNull() {
+			vmUpdated.Gateway = plan.Gateway.ValueString()
+		}
+		if !plan.DnsServer.IsUnknown() && !plan.DnsServer.IsNull() {
+			vmUpdated.DnsServer = plan.DnsServer.ValueString()
+		}
+	}
+
+	// Update existing VM
+	_, errUpdate := r.client.UpdateVm(plan.ID.ValueString(), vmCurrent, vmUpdated)
+	if errUpdate != nil {
 		resp.Diagnostics.AddError(
 			"Error Updating NewVM Vm",
-			"Could not update VM, unexpected error: "+err.Error(),
+			"Could not update VM, unexpected error: "+errUpdate.Error(),
 		)
 		return
 	}
 
 	// Fetch updated items from GetVm as UpdateVm items are not populated.
-	vmNew, err := r.client.GetVm(plan.ID.ValueString())
-	if err != nil {
+	vmNew, errGet := r.client.GetVm(plan.ID.ValueString())
+	if errGet != nil {
 		resp.Diagnostics.AddError(
 			"Error Reading NewVM VM",
-			"Could not read NewVM VM ID "+plan.ID.ValueString()+": "+err.Error(),
+			"Could not read NewVM VM ID "+plan.ID.ValueString()+": "+errGet.Error(),
 		)
+		return
+	}
+
+	// vm.Vpc is []int32 coming from API
+	list, diags := types.ListValueFrom(ctx, types.Int32Type, vmNew.Vpc)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -397,6 +431,11 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 	plan.Cores = types.Int64Value(int64(vmNew.Cores))
 	plan.Disk = types.Int64Value(vmNew.HdSize)
 	plan.SshKey = types.StringValue(vmNew.SshKey)
+	plan.Vpc = list
+	plan.IpAddress = types.StringValue(vmNew.IpAddress)
+	plan.Gateway = types.StringValue(vmNew.Gateway)
+	plan.DnsServer = types.StringValue(vmNew.DnsServer)
+	plan.SubnetMask = types.StringValue(vmNew.SubnetMask)
 	plan.LastUpdated = types.StringValue(time.Now().Format(time.RFC850))
 
 	diags = resp.State.Set(ctx, plan)
