@@ -20,6 +20,31 @@ type NewVmVmWrapper struct {
 	Vm Vm `json:"vm"`
 }
 
+func formatOrderEndDate(billedUntil string, now time.Time, timezone *time.Location) (string, error) {
+	billedUntil = strings.TrimSpace(billedUntil)
+	if billedUntil == "" {
+		return now.In(timezone).Format("2006-01-02"), nil
+	}
+
+	layouts := []string{
+		time.RFC3339Nano,
+		"2006-01-02T15:04:05.000Z07:00",
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02",
+	}
+
+	var parseErr error
+	for _, layout := range layouts {
+		endDate, err := time.Parse(layout, billedUntil)
+		if err == nil {
+			return endDate.In(timezone).Format("2006-01-02"), nil
+		}
+		parseErr = err
+	}
+
+	return "", fmt.Errorf("invalid billed_until %q: %w", billedUntil, parseErr)
+}
+
 // GetVms - Returns list of available VM products (no auth required)
 func (c *Client) GetVmProducts(ctx context.Context) ([]VmProduct, error) {
 	vmProducts := []VmProduct{}
@@ -772,16 +797,19 @@ func (c *Client) DeleteVm(ctx context.Context, orderID int64) error {
 		EndDate          string `json:"end_date"`
 		IncludeSubOrders bool   `json:"includeSubOrders,omitempty"`
 	}
-	endDate, err := time.Parse("2006-01-02T15:04:05.000Z07:00", orderData.Order.BilledUntil) // this is the format for RFC3339 including milliseconds
-	if err != nil {
-		panic(err)
-	}
+
 	timezone, err := time.LoadLocation("Europe/Amsterdam")
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("load timezone: %w", err)
 	}
+
+	endDate, err := formatOrderEndDate(orderData.Order.BilledUntil, time.Now(), timezone)
+	if err != nil {
+		return fmt.Errorf("determine order end date for order %d: %w", orderID, err)
+	}
+
 	newVmOrderEnd := NewVmOrderEnd{
-		EndDate:          endDate.In(timezone).Format("2006-01-02"), // this is the format for YYYY-MM-DD
+		EndDate:          endDate, // this is the format for YYYY-MM-DD
 		IncludeSubOrders: true,
 	}
 	reqBodyOrderEnd, err := json.Marshal(newVmOrderEnd)
