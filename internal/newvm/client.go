@@ -34,7 +34,8 @@ type AuthResponse struct {
 // NewClient -
 func NewClient(ctx context.Context, host, username, password *string, totp *string) (*Client, error) {
 	c := Client{
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
+		// NewVM state transitions can take longer than a few seconds, especially during delete.
+		HTTPClient: &http.Client{Timeout: 2 * time.Minute},
 		// Default NewVM URL
 		HostURL: HostURL,
 	}

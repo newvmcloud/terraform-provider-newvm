@@ -394,7 +394,12 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 		return
 	}
 
-	set, diags := types.SetValueFrom(ctx, types.Int32Type, vm.Vpc)
+	vpcNumbers := vm.Vpc
+	if vpcNumbers == nil {
+		vpcNumbers = []int32{}
+	}
+
+	set, diags := types.SetValueFrom(ctx, types.Int32Type, vpcNumbers)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -406,7 +411,9 @@ func (r *vmResource) Read(ctx context.Context, req resource.ReadRequest, resp *r
 	state.Name = types.StringValue(vm.VmName)
 	state.VmProductID = types.StringValue(vm.VmProductID)
 	state.Os = types.StringValue(vm.Os)
-	state.Location = types.StringValue(vm.Location)
+	if vm.Location != "" {
+		state.Location = types.StringValue(vm.Location)
+	}
 	// state.Hostname = types.StringValue(vm.Hostname)
 	state.Ram = types.Int64Value(vm.Ram)
 	state.Cores = types.Int64Value(int64(vm.Cores))
@@ -546,7 +553,12 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 		return
 	}
 
-	set, diags := types.SetValueFrom(ctx, types.Int32Type, vmNew.Vpc)
+	vpcNumbers := vmNew.Vpc
+	if vpcNumbers == nil {
+		vpcNumbers = []int32{}
+	}
+
+	set, diags := types.SetValueFrom(ctx, types.Int32Type, vpcNumbers)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -554,7 +566,9 @@ func (r *vmResource) Update(ctx context.Context, req resource.UpdateRequest, res
 
 	plan.VmProductID = types.StringValue(vmNew.VmProductID)
 	plan.Os = types.StringValue(vmNew.Os)
-	plan.Location = types.StringValue(vmNew.Location)
+	if vmNew.Location != "" {
+		plan.Location = types.StringValue(vmNew.Location)
+	}
 	// plan.Hostname = types.StringValue(vmNew.Hostname)
 	plan.Ram = types.Int64Value(vmNew.Ram)
 	plan.Cores = types.Int64Value(int64(vmNew.Cores))
