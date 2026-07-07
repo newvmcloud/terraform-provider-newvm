@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type NewVmVpcsWrapper struct {
@@ -185,20 +186,86 @@ func (c *Client) UpdateVpc(ctx context.Context, ID string, vpc Vpc) error {
 
 }
 
+func (c *Client) deleteVpcMember(ctx context.Context, vpcID string, orderID int) error {
+	type VpcMemberRequest struct {
+		OrderID int `json:"orderid"`
+	}
+
+	rb, err := json.Marshal(VpcMemberRequest{OrderID: orderID})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/backend/com.newvm.network/v1/vxlan/%s/members", c.HostURL, vpcID), strings.NewReader(string(rb)))
+	if err != nil {
+		return err
+	}
+
+	_, err = c.doRequest(req)
+	return err
+}
+
+func (c *Client) getVpcMembersByNumber(ctx context.Context, vpcNumber int32) ([]VpcMember, error) {
+	vpcMembers, err := c.GetVpcMembers(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	filteredMembers := make([]VpcMember, 0, len(vpcMembers))
+	for _, member := range vpcMembers {
+		if member.Vxlan == vpcNumber {
+			filteredMembers = append(filteredMembers, member)
+		}
+	}
+
+	return filteredMembers, nil
+}
+
 // DeleteVpc - Deletes a VPC
 func (c *Client) DeleteVpc(ctx context.Context, ID string) error {
-	reqOrderEnd, err := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/backend/com.newvm.network/v1/vxlan/%s", c.HostURL, ID), nil)
-	if err != nil {
-		return err
-	}
-	resBodyOrderEnd, err := c.doRequest(reqOrderEnd)
+	vpc, err := c.GetVpc(ctx, ID)
 	if err != nil {
 		return err
 	}
 
-	if strings.ReplaceAll(string(resBodyOrderEnd), " ", "") != "{\"success\":true}" {
-		return errors.New(string(resBodyOrderEnd))
+	vpcMembers, err := c.getVpcMembersByNumber(ctx, vpc.Number)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	for _, member := range vpcMembers {
+		if err := c.deleteVpcMember(ctx, vpc.ID, member.OrderID); err != nil {
+			return err
+		}
+	}
+
+	var lastErr error
+	for attempt := 0; attempt < 6; attempt++ {
+		reqOrderEnd, err := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/backend/com.newvm.network/v1/vxlan/%s", c.HostURL, ID), nil)
+		if err != nil {
+			return err
+		}
+
+		resBodyOrderEnd, err := c.doRequest(reqOrderEnd)
+		if err == nil {
+			if strings.ReplaceAll(string(resBodyOrderEnd), " ", "") != "{\"success\":true}" {
+				return errors.New(string(resBodyOrderEnd))
+			}
+
+			return nil
+		}
+
+		lastErr = err
+		if !strings.Contains(err.Error(), "Failed to trigger VXLAN change") || attempt == 5 {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+
+	return lastErr
 }
