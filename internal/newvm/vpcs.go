@@ -18,6 +18,11 @@ type NewVmVpcMembersWrapper struct {
 	Members []VpcMember `json:"members"`
 }
 
+const (
+	vpcDeleteMaxAttempts = 6
+	vpcDeleteRetryDelay  = 5 * time.Second
+)
+
 // GetVpcs - Returns all VPCs
 func (c *Client) GetVpcs(ctx context.Context) ([]Vpc, error) {
 	vpcs := []Vpc{}
@@ -221,6 +226,31 @@ func (c *Client) getVpcMembersByNumber(ctx context.Context, vpcNumber int32) ([]
 	return filteredMembers, nil
 }
 
+func (c *Client) waitForVpcMembersDeletion(ctx context.Context, vpcNumber int32) error {
+	var lastErr error
+
+	for attempt := 0; attempt < vpcDeleteMaxAttempts; attempt++ {
+		vpcMembers, err := c.getVpcMembersByNumber(ctx, vpcNumber)
+		if err == nil && len(vpcMembers) == 0 {
+			return nil
+		}
+
+		if err != nil {
+			lastErr = err
+		} else {
+			lastErr = fmt.Errorf("VPC %d still has %d members attached", vpcNumber, len(vpcMembers))
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(vpcDeleteRetryDelay):
+		}
+	}
+
+	return lastErr
+}
+
 // DeleteVpc - Deletes a VPC
 func (c *Client) DeleteVpc(ctx context.Context, ID string) error {
 	vpc, err := c.GetVpc(ctx, ID)
@@ -239,8 +269,14 @@ func (c *Client) DeleteVpc(ctx context.Context, ID string) error {
 		}
 	}
 
+	if len(vpcMembers) > 0 {
+		if err := c.waitForVpcMembersDeletion(ctx, vpc.Number); err != nil {
+			return err
+		}
+	}
+
 	var lastErr error
-	for attempt := 0; attempt < 6; attempt++ {
+	for attempt := 0; attempt < vpcDeleteMaxAttempts; attempt++ {
 		reqOrderEnd, err := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/backend/com.newvm.network/v1/vxlan/%s", c.HostURL, ID), nil)
 		if err != nil {
 			return err
@@ -256,14 +292,14 @@ func (c *Client) DeleteVpc(ctx context.Context, ID string) error {
 		}
 
 		lastErr = err
-		if !strings.Contains(err.Error(), "Failed to trigger VXLAN change") || attempt == 5 {
+		if !strings.Contains(err.Error(), "Failed to trigger VXLAN change") || attempt == vpcDeleteMaxAttempts-1 {
 			return err
 		}
 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(5 * time.Second):
+		case <-time.After(vpcDeleteRetryDelay):
 		}
 	}
 
